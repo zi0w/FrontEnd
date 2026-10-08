@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { FormEvent } from "react";
+import { DEMO_CREDENTIALS, IS_DEMO_MODE } from "@/shared/api/demo-mode";
 import { ApiError } from "@/shared/api/http-client";
 import { signInAdmin } from "../api/signIn";
 
@@ -11,8 +12,9 @@ const SERVER_ERROR = "서버에 연결할 수 없습니다. 잠시 후 다시 �
 
 export function useAdminLogin() {
   const router = useRouter();
-  const [email, setEmailValue] = useState("");
-  const [password, setPasswordValue] = useState("");
+  // 데모 모드는 방문자가 바로 로그인할 수 있게 계정을 미리 채운다
+  const [email, setEmailValue] = useState(IS_DEMO_MODE ? DEMO_CREDENTIALS.email : "");
+  const [password, setPasswordValue] = useState(IS_DEMO_MODE ? DEMO_CREDENTIALS.password : "");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 

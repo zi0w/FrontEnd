@@ -1,4 +1,5 @@
 import { getAdminAccessToken } from "@/features/admin-auth/model/admin-session";
+import { IS_DEMO_MODE } from "./demo-mode";
 import type { ApiEnvelope, ApiErrorBody } from "./types";
 
 export class ApiError extends Error {
@@ -78,10 +79,17 @@ function mergeAuthHeaders(initHeaders?: HeadersInit): Record<string, string> {
   return headers;
 }
 
+// 데모 모드는 목 fetch로 교체한다(동적 import로 일반 번들에서 픽스처 제외)
+async function resolveFetch(): Promise<typeof fetch> {
+  if (!IS_DEMO_MODE) return fetch;
+  const { mockFetch } = await import("./mock/mock-fetch");
+  return mockFetch;
+}
+
 // 브라우저는 same-origin 상대 경로로 rewrites 프록시를 탄다.
 function buildUrl(path: string): string {
   const suffix = path.startsWith("/") ? path : `/${path}`;
-  if (typeof window !== "undefined") {
+  if (typeof window !== "undefined" || IS_DEMO_MODE) {
     return suffix;
   }
   if (!BASE_URL) {
@@ -93,7 +101,8 @@ function buildUrl(path: string): string {
 
 export async function getJson<T>(path: string, init?: RequestInit): Promise<T> {
   const url = buildUrl(path);
-  const response = await fetch(url, {
+  const fetcher = await resolveFetch();
+  const response = await fetcher(url, {
     ...init,
     cache: init?.cache ?? "no-store",
     headers: {
@@ -126,7 +135,8 @@ export async function postJson<T>(path: string, body: unknown, init?: RequestIni
     ? { Accept: "application/json", ...authHeaders }
     : { Accept: "application/json", "Content-Type": "application/json", ...authHeaders };
 
-  const response = await fetch(url, {
+  const fetcher = await resolveFetch();
+  const response = await fetcher(url, {
     method: "POST",
     ...init,
     body: isFormData ? body : JSON.stringify(body),
@@ -149,7 +159,8 @@ export async function postJson<T>(path: string, body: unknown, init?: RequestIni
 export async function patchJson<T>(path: string, body: unknown, init?: RequestInit): Promise<T> {
   const url = buildUrl(path);
 
-  const response = await fetch(url, {
+  const fetcher = await resolveFetch();
+  const response = await fetcher(url, {
     method: "PATCH",
     ...init,
     body: JSON.stringify(body),
