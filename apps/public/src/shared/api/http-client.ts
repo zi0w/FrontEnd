@@ -1,3 +1,4 @@
+import { IS_DEMO_MODE } from "./demo-mode";
 import type { ApiEnvelope } from "./types";
 
 // API 호출 실패를 나타내는 오류. 상태 코드와 엔드포인트를 함께 보관.
@@ -21,7 +22,8 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 // (백엔드가 실제 응답에 CORS 헤더를 누락해 직접 호출이 차단되기 때문).
 function buildUrl(path: string): string {
   const suffix = path.startsWith("/") ? path : `/${path}`;
-  if (typeof window !== "undefined") {
+  // 데모 모드는 네트워크를 쓰지 않으므로 base URL 없이 상대 경로로 라우팅
+  if (typeof window !== "undefined" || IS_DEMO_MODE) {
     return suffix;
   }
   if (!BASE_URL) {
@@ -31,10 +33,19 @@ function buildUrl(path: string): string {
   return `${base}${suffix}`;
 }
 
+// 데모 모드면 mock 응답, 아니면 실제 fetch. 동적 import라 비데모 모드에서는 픽스처 청크를 내려받지 않는다.
+async function request(url: string, init: RequestInit): Promise<Response> {
+  if (IS_DEMO_MODE) {
+    const { mockFetch } = await import("./mock/mock-fetch");
+    return mockFetch(url, init);
+  }
+  return fetch(url, init);
+}
+
 // GET 요청 후 { success, data } 봉투를 언랩. non-2xx이거나 success=false면 ApiError throw.
 export async function getJson<T>(path: string, init?: RequestInit): Promise<T> {
   const url = buildUrl(path);
-  const response = await fetch(url, {
+  const response = await request(url, {
     ...init,
     headers: { Accept: "application/json", ...init?.headers },
   });
@@ -60,7 +71,7 @@ export async function postJson<T>(path: string, body: unknown, init?: RequestIni
     ? { Accept: "application/json", ...init?.headers }
     : { Accept: "application/json", "Content-Type": "application/json", ...init?.headers };
 
-  const response = await fetch(url, {
+  const response = await request(url, {
     method: "POST",
     ...init,
     body: isFormData ? body : JSON.stringify(body),
@@ -83,7 +94,7 @@ export async function patchJson<T>(path: string, body: unknown, init?: RequestIn
   const url = buildUrl(path);
   const headers = { Accept: "application/json", "Content-Type": "application/json", ...init?.headers };
 
-  const response = await fetch(url, {
+  const response = await request(url, {
     method: "PATCH",
     ...init,
     body: JSON.stringify(body),
@@ -106,7 +117,7 @@ export async function deleteVoid(path: string, init?: RequestInit): Promise<void
   const url = buildUrl(path);
   const headers = { Accept: "application/json", ...init?.headers };
 
-  const response = await fetch(url, {
+  const response = await request(url, {
     method: "DELETE",
     ...init,
     headers,
